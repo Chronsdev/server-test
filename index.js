@@ -1,5 +1,8 @@
-import express from 'express'
-import cors from 'cors'
+require('dotenv').config()
+const express = require('express')
+const cors = require('cors')
+const mongoose = require('mongoose')
+const Person = require('./Models/person')
 
 const app = express()
 
@@ -16,97 +19,77 @@ const requestLogger = (request, response, next) => {
  
 app.use(requestLogger)
 
+const errorHandler = (error, request, response, next) => {
+  console.error(error.message)
+
+  if (error.name === 'CastError') {
+    return response.status(400).send({ error: 'malformatted id' })
+  } else if (error.name === 'ValidationError') {
+    return response.status(400).json({ error: error.message })
+  }
+
+  next(error)
+}
+
+app.use(errorHandler)
+
 app.get('/', (req, res) =>{
 	res.send('<h1>This is a app</h1>')
 })
 
-let persons = [
- {
-	id: 1,
-	name: "Arto Helias",
-	number: "040-123456"
- },
- {
-	id: 2,
-	name: "Ada Lovelace",
-	number: "39-44-5323523"
- },
- {
-	id: 3,
-	name: "Dan Abramov",
-	number: "12-43-234345"
- },
- {
-	id: 4,
-	name: "Mary Poppondick",
-	number: "39-23-6423122"
- }
-]
-
 app.get('/api/persons', (req, res) =>{
-	res.json(persons)
+	Person.find({}).then(pers =>{
+		res.json(pers)
+	})
 })
 
 app.get('/info', (req, res)=>{
-	const pers = persons.length
+	const pers = Person.length
 	const date = new Date()
 	res.send(`<h1>Phonebook has info for ${pers} peopke</h1>
 		<h3>${date}</h3>`)
 })
 
-app.get('/api/persons/:id', (req, res)=>{
-	const id = Number(req.params.id)
-	const person = persons.find(n => n.id === id)
-
-	if (person) {
-		res.json(person)
-	} else {
-		res.status(404).end()
-	}	 
+app.get('/api/persons/:id', (req, res, next)=>{
+	Person.findById(req.params.id)
+	.then(note =>{
+      if (note) {
+        res.json(note)
+      } else {
+        response.status(404).end()
+      }
+    })
+    .catch(error => next(error))
 })
 
-const numbRandom = () =>{
-	const random = Math.round(Math.random()*100)
-	return random
-}
-
-app.post('/api/persons', (req, res)=>{
+app.post('/api/persons', (req, res, next)=>{
 	const body = req.body
 
-	const person = {
-		id: numbRandom(),
-		name: body.name,
-		number: body.number
-	}
-
-	const names = persons.find(p => p.name === person.name)
-
-	if (person.name == false || person.number == false) {
-		return res.status(400).json({
-			error: "name or number missing"
+	const person = new Person({
+			content: body.name,
+			date: new Date(),
+			important: body.important || false,
 		})
-	} else if (names){
-		return res.status(400).json({
-			error: "name are equal"
-		})
-	} else{
-		persons = persons.concat(person)
-	    res.json(person)
-	}
 
+	person.save().then(personSaved =>{
+		res.json(personSaved)
+		console.log(personSaved)
+	})
+	.catch(error => next(error))
 	
 }) 
    
-app.delete('/api/persons/:id', (req, res)=>{
-	const id = Number(req.params.id)
-	persons = persons.filter(n => n.id !== id)
-
-	res.status(204).end()
+app.delete('/api/persons/:id', (request, response, next) => {
+  Person.findByIdAndRemove(request.params.id)
+    .then(result => {
+      response.status(204).end()
+      Person.filter(fill => fill.id !== result)
+    })
+    .catch(error => next(error))
 })
 
 
-
-const PORT = process.env.PORT || 3001
+const PORT = process.env.PORT
 app.listen(PORT, ()=>{
 	console.log(`The server start running in port ${PORT}`)
 })
